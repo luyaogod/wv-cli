@@ -1,10 +1,9 @@
 """Shared utility functions for wv-cli."""
+
 import os
 import platform
-import re
 import shutil
 import subprocess
-import sys
 
 import click
 import toml
@@ -13,6 +12,7 @@ import toml
 # ---------------------------------------------------------------------------
 # wv.toml helpers
 # ---------------------------------------------------------------------------
+
 
 def load_config(project_root: str) -> dict:
     """Load wv.toml from the project root. Raises click.ClickException on failure."""
@@ -45,6 +45,7 @@ def find_project_root() -> str:
 # Environment checks
 # ---------------------------------------------------------------------------
 
+
 def check_command(cmd: str) -> bool:
     """Return True if the shell command is available on PATH."""
     return shutil.which(cmd) is not None
@@ -54,8 +55,7 @@ def require_node():
     """Abort with a helpful message if node/npm is missing."""
     if not check_command("node") or not check_command("npm"):
         raise click.ClickException(
-            "Node.js / npm not found.\n"
-            "Please install Node.js from: https://nodejs.org"
+            "Node.js / npm not found.\nPlease install Node.js from: https://nodejs.org"
         )
 
 
@@ -63,8 +63,7 @@ def require_pnpm():
     """Abort with a helpful message if pnpm is missing."""
     if not check_command("pnpm"):
         raise click.ClickException(
-            "pnpm not found.\n"
-            "Install it with: npm install -g pnpm"
+            "pnpm not found.\nInstall it with: npm install -g pnpm"
         )
 
 
@@ -82,6 +81,7 @@ def require_uv():
 # Subprocess helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_cmd(cmd: str) -> str:
     """On Windows, resolve e.g. 'npm' → 'npm.cmd' so subprocess can find it."""
     if platform.system() == "Windows":
@@ -93,35 +93,81 @@ def _resolve_cmd(cmd: str) -> str:
 
 def ensure_npm_deps(frontend_dir: str) -> None:
     """Run `npm install` if node_modules is missing or package.json has changed."""
-    node_modules = os.path.join(frontend_dir, 'node_modules')
+    node_modules = os.path.join(frontend_dir, "node_modules")
     if not os.path.isdir(node_modules):
-        click.echo('  📥 安装前端依赖（npm install）…')
-        run_cmd(['npm', 'install'], cwd=frontend_dir)
+        click.echo("  📥 Installing frontend dependencies (npm install)…")
+        run_cmd(["npm", "install"], cwd=frontend_dir)
 
 
 def detect_package_manager(project_root: str) -> str:
     """Detect which package manager the project uses based on lock files.
-    
+
     Priority:
     1. pnpm-lock.yaml -> pnpm
     2. yarn.lock -> yarn (future support)
     3. package-lock.json -> npm
     4. Default -> npm
     """
-    frontend_dir = os.path.join(project_root, 'frontend')
-    pnpm_lock = os.path.join(frontend_dir, 'pnpm-lock.yaml')
-    
+    frontend_dir = os.path.join(project_root, "frontend")
+    pnpm_lock = os.path.join(frontend_dir, "pnpm-lock.yaml")
+
     if os.path.isfile(pnpm_lock):
-        return 'pnpm'
-    return 'npm'
+        return "pnpm"
+    return "npm"
 
 
-def ensure_frontend_deps(frontend_dir: str, package_manager: str = 'npm') -> None:
+def detect_frontend_framework(project_root: str) -> str:
+    """Detect which frontend framework the project uses.
+
+    Detection logic:
+    1. Check for Vue specific files (src/router/index.ts with createWebHistory)
+    2. Check for React specific files (src/main.jsx or src/main.tsx)
+    3. Check package.json for dependencies
+    4. Default to 'vue' for backward compatibility
+    """
+    frontend_dir = os.path.join(project_root, "frontend")
+
+    # Check for Vue Router - strong indicator of Vue project
+    vue_router_file = os.path.join(frontend_dir, "src", "router", "index.ts")
+    vue_router_file_js = os.path.join(frontend_dir, "src", "router", "index.js")
+    if os.path.isfile(vue_router_file) or os.path.isfile(vue_router_file_js):
+        return "vue"
+
+    # Check for React entry files
+    react_main_jsx = os.path.join(frontend_dir, "src", "main.jsx")
+    react_main_tsx = os.path.join(frontend_dir, "src", "main.tsx")
+    if os.path.isfile(react_main_jsx) or os.path.isfile(react_main_tsx):
+        return "react"
+
+    # Check package.json for framework dependencies
+    package_json = os.path.join(frontend_dir, "package.json")
+    if os.path.isfile(package_json):
+        try:
+            with open(package_json, "r", encoding="utf-8") as f:
+                import json
+
+                pkg = json.load(f)
+                deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+
+                if "vue" in deps:
+                    return "vue"
+                elif "react" in deps:
+                    return "react"
+        except Exception:
+            pass
+
+    # Default to vue for backward compatibility
+    return "vue"
+
+
+def ensure_frontend_deps(frontend_dir: str, package_manager: str = "npm") -> None:
     """Install frontend dependencies using the specified package manager."""
-    node_modules = os.path.join(frontend_dir, 'node_modules')
+    node_modules = os.path.join(frontend_dir, "node_modules")
     if not os.path.isdir(node_modules):
-        click.echo(f'  📥 安装前端依赖（{package_manager} install）…')
-        run_cmd([package_manager, 'install'], cwd=frontend_dir)
+        click.echo(
+            f"  📥 Installing frontend dependencies ({package_manager} install)…"
+        )
+        run_cmd([package_manager, "install"], cwd=frontend_dir)
 
 
 def run_cmd(args: list, cwd: str = None, shell: bool = False):
@@ -135,10 +181,10 @@ def run_cmd(args: list, cwd: str = None, shell: bool = False):
         )
 
 
-
 # ---------------------------------------------------------------------------
 # Favicon injection
 # ---------------------------------------------------------------------------
+
 
 def inject_favicon(project_root: str) -> None:
     """
@@ -146,70 +192,26 @@ def inject_favicon(project_root: str) -> None:
     frontend/dist/ with the project's own icon/favicon.ico.
     Idempotent and skipped gracefully when source or dist is missing.
     """
-    src_ico = os.path.join(project_root, 'icon', 'favicon.ico')
+    src_ico = os.path.join(project_root, "icon", "favicon.ico")
 
     if not os.path.isfile(src_ico):
-        click.echo('跳过 favicon 注入：icon/favicon.ico 不存在')
+        click.echo("Skipping favicon injection: icon/favicon.ico not found\n")
         return
 
-    dist_dir = os.path.join(project_root, 'frontend', 'dist')
+    dist_dir = os.path.join(project_root, "frontend", "dist")
     if not os.path.isdir(dist_dir):
-        click.echo('跳过 favicon 注入：frontend/dist 不存在')
+        click.echo("Skipping favicon injection: frontend/dist not found\n")
         return
 
     replaced = 0
     for dirpath, _, filenames in os.walk(dist_dir):
         for filename in filenames:
-            if filename.lower() == 'favicon.ico':
+            if filename.lower() == "favicon.ico":
                 dst = os.path.join(dirpath, filename)
                 shutil.copy2(src_ico, dst)
                 rel = os.path.relpath(dst, project_root)
-                click.echo(f'✔ 已注入 favicon：{rel}')
+                click.echo(f"✔ Injected favicon: {rel}")
                 replaced += 1
 
     if replaced == 0:
-        click.echo('跳过 favicon 注入：dist 中未找到 favicon.ico')
-
-# ---------------------------------------------------------------------------
-# Frontend router fix
-# ---------------------------------------------------------------------------
-
-def fix_router_history(project_root: str) -> None:
-    """
-    Replace createWebHistory with createWebHashHistory in the Vue Router
-    entry file so that file:// protocol works correctly after packaging.
-    This function is idempotent.
-    """
-    router_dir = os.path.join(project_root, "frontend", "src", "router")
-
-    if not os.path.isdir(router_dir):
-        click.echo("跳过路由修复：未检测到 router 目录")
-        return
-
-    target_file = None
-    for filename in ("index.ts", "index.js"):
-        candidate = os.path.join(router_dir, filename)
-        if os.path.isfile(candidate):
-            target_file = candidate
-            break
-
-    if target_file is None:
-        click.echo("跳过路由修复：未找到 router/index.ts 或 router/index.js")
-        return
-
-    with open(target_file, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    if "createWebHistory" not in content:
-        click.echo("跳过路由修复：未检测到 createWebHistory，无需修改")
-        return
-
-    # \b boundary: createWebHashHistory does NOT contain createWebHistory as a
-    # substring, so this replacement is idempotent.
-    new_content = re.sub(r"\bcreateWebHistory\b", "createWebHashHistory", content)
-
-    with open(target_file, "w", encoding="utf-8") as f:
-        f.write(new_content)
-
-    rel_path = os.path.relpath(target_file, project_root)
-    click.echo(f"✔ 已修复：{rel_path}（createWebHistory → createWebHashHistory）")
+        click.echo("Skipping favicon injection: no favicon.ico found in dist\n")

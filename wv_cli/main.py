@@ -1,4 +1,5 @@
 """wv-cli: Scaffold tool for pywebview + Vue3 desktop apps."""
+
 import click
 from .commands.create import create
 from .commands.run import run

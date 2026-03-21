@@ -1,12 +1,13 @@
 # wv-cli
 
-A command-line scaffold tool for building **pywebview (Python backend) + Vue 3 (frontend)** desktop apps.
+A command-line scaffold tool for building **pywebview (Python backend) + Vue 3 / React (frontend)** desktop apps.
 
 ## Requirements
 
 - Python ≥ 3.9
 - [uv](https://docs.astral.sh/uv/) — Python package manager
-- [Node.js / npm](https://nodejs.org) — for the Vue 3 frontend
+- [Node.js / npm](https://nodejs.org) — for the frontend
+- [pnpm](https://pnpm.io/) *(optional)* — alternative package manager
 - [Inno Setup 6](https://jrsoftware.org/isdl.php) *(Windows only, required for `--publish`)*
 
 ## Installation
@@ -41,15 +42,23 @@ wv create path/to/my-app
 You will be prompted for:
 | Prompt | Default |
 |---|---|
-| 项目名称 (project name) | directory name |
-| 窗口标题 (window title) | project name |
-| 版本号 (version) | `1.0.0` |
-| 作者 (author) | *(empty)* |
+| Project name | directory name |
+| Window title | project name |
+| Version | `1.0.0` |
+| Author | *(empty)* |
+| Package manager | `npm` (auto-detected) |
+| Frontend template | `Vue 3 + TypeScript` |
+
+Available frontend templates:
+- Vue 3 + TypeScript (`vue-ts`)
+- Vue 3 + JavaScript (`vue`)
+- React + TypeScript (`react-ts`)
+- React + JavaScript (`react`)
 
 After answering, the CLI will:
 1. Scaffold the full directory structure
-2. Run `npm create vue@latest` for the frontend (you drive the Vue prompts)
-3. Run `uv init / venv / add pywebview pyinstaller` for the backend
+2. Initialize the frontend with `create-vite`
+3. Initialize the backend with `uv`
 
 ### Run in development mode
 
@@ -58,7 +67,7 @@ cd my-app
 wv run
 ```
 
-Builds the Vue frontend, then launches the pywebview window loading `frontend/dist`.
+Builds the frontend, then launches the pywebview window loading `frontend/dist`.
 
 ### Production build
 
@@ -91,7 +100,7 @@ my-app/
 ├── icon/
 │   ├── favicon.ico
 │   └── logo.png
-├── frontend/          ← Vue 3 (npm create vue@latest)
+├── frontend/          ← Vue 3 or React (Vite)
 │   └── dist/          ← built by wv run / wv build
 ├── backend/
 │   ├── .venv/         ← uv virtual environment
@@ -108,13 +117,15 @@ my-app/
 └── wv.toml
 ```
 
-## Frontend Router Auto-Fix
+## Frontend Router Note
 
-`wv run` and `wv build` automatically replace `createWebHistory` with
-`createWebHashHistory` in `frontend/src/router/index.{ts,js}` before building.
-This ensures the app works correctly when loaded via the `file://` protocol
-after packaging. The replacement is **idempotent** — running it multiple times
-has no side effects.
+When using Vue Router or React Router, ensure you use **HashHistory** mode for
+`file://` protocol compatibility after packaging:
+
+- **Vue**: Use `createWebHashHistory` instead of `createWebHistory`
+- **React**: Use `createHashHistory` instead of `createBrowserHistory`
+
+The CLI will remind you about this after `wv create`, `wv run`, and `wv build`.
 
 ## `wv.toml` Reference
 
