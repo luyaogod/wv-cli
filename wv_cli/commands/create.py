@@ -5,7 +5,7 @@ import shutil
 import click
 import toml
 
-from ..utils import require_node, require_uv, run_cmd
+from ..utils import require_node, require_uv, run_cmd, check_command
 from ..templates import (
     WV_TOML,
     CONFIG_PY,
@@ -147,16 +147,33 @@ def create(directory):
     require_uv()
     click.echo('  ✔ uv')
 
+    # 检测并选择包管理器
+    has_npm = check_command('npm')
+    has_pnpm = check_command('pnpm')
+    
+    package_manager = 'npm'  # 默认
+    if has_npm and has_pnpm:
+        package_manager = click.prompt(
+            '选择包管理器',
+            type=click.Choice(['npm', 'pnpm']),
+            default='npm'
+        )
+    elif has_pnpm:
+        package_manager = 'pnpm'
+        click.echo('  ✔ pnpm')
+    else:
+        click.echo('  ✔ npm')
+
     click.echo('\n📁 创建项目结构…')
     _scaffold_directories(project_dir)
     _scaffold_files(project_dir, project_name, version, window_title, author)
     _copy_default_icons(project_dir)
     click.echo('  ✔ 目录与文件已生成')
 
-    click.echo('\n🖼  初始化前端（npm create vue@latest）…')
+    click.echo(f'\n🖼  初始化前端（{package_manager} create vue@latest）…')
     frontend_dir = os.path.join(project_dir, 'frontend')
     _makedirs(frontend_dir)
-    run_cmd(['npm', 'create', 'vue@latest', '.'], cwd=frontend_dir)
+    run_cmd([package_manager, 'create', 'vue@latest', '.'], cwd=frontend_dir)
 
     click.echo('\n🐍 初始化后端（uv）…')
     backend_dir = os.path.join(project_dir, 'backend')

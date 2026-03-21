@@ -59,6 +59,15 @@ def require_node():
         )
 
 
+def require_pnpm():
+    """Abort with a helpful message if pnpm is missing."""
+    if not check_command("pnpm"):
+        raise click.ClickException(
+            "pnpm not found.\n"
+            "Install it with: npm install -g pnpm"
+        )
+
+
 def require_uv():
     """Abort with a helpful message if uv is missing."""
     if not check_command("uv"):
@@ -88,6 +97,31 @@ def ensure_npm_deps(frontend_dir: str) -> None:
     if not os.path.isdir(node_modules):
         click.echo('  📥 安装前端依赖（npm install）…')
         run_cmd(['npm', 'install'], cwd=frontend_dir)
+
+
+def detect_package_manager(project_root: str) -> str:
+    """Detect which package manager the project uses based on lock files.
+    
+    Priority:
+    1. pnpm-lock.yaml -> pnpm
+    2. yarn.lock -> yarn (future support)
+    3. package-lock.json -> npm
+    4. Default -> npm
+    """
+    frontend_dir = os.path.join(project_root, 'frontend')
+    pnpm_lock = os.path.join(frontend_dir, 'pnpm-lock.yaml')
+    
+    if os.path.isfile(pnpm_lock):
+        return 'pnpm'
+    return 'npm'
+
+
+def ensure_frontend_deps(frontend_dir: str, package_manager: str = 'npm') -> None:
+    """Install frontend dependencies using the specified package manager."""
+    node_modules = os.path.join(frontend_dir, 'node_modules')
+    if not os.path.isdir(node_modules):
+        click.echo(f'  📥 安装前端依赖（{package_manager} install）…')
+        run_cmd([package_manager, 'install'], cwd=frontend_dir)
 
 
 def run_cmd(args: list, cwd: str = None, shell: bool = False):

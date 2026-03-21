@@ -3,7 +3,7 @@ import os
 
 import click
 
-from ..utils import find_project_root, load_config, run_cmd, fix_router_history, ensure_npm_deps, inject_favicon
+from ..utils import find_project_root, load_config, run_cmd, fix_router_history, ensure_frontend_deps, inject_favicon, detect_package_manager
 
 
 @click.command('run')
@@ -20,9 +20,13 @@ def run():
 
     # 2. Build frontend
     frontend_dir = os.path.join(project_root, 'frontend')
-    click.echo('\n📦 构建前端…')
-    ensure_npm_deps(frontend_dir)
-    run_cmd(['npm', 'run', 'build'], cwd=frontend_dir)
+    
+    # 检测包管理器
+    package_manager = detect_package_manager(project_root)
+    click.echo(f'\n📦 构建前端（使用 {package_manager}）…')
+    
+    ensure_frontend_deps(frontend_dir, package_manager)
+    run_cmd([package_manager, 'run', 'build'], cwd=frontend_dir)
     inject_favicon(project_root)
 
     # 3. Verify frontend/dist exists
