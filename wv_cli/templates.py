@@ -9,6 +9,7 @@ name = "{project_name}"
 version = "{version}"
 window_title = "{window_title}"
 author = "{author}"
+package_manager = "{package_manager}"
 
 [build]
 # Windows default path; ignored on non-Windows platforms
@@ -74,6 +75,146 @@ class Api:
 
     def greet(self, name: str) -> str:
         return f"Hello, {name}!"
+"""
+
+BRIDGE_API_PY_WITH_DB = """\
+from db.utils import get_db_session
+from db.models import User
+
+
+class Api:
+    \"\"\"
+    pywebview JS API example with SQLite database support.
+    The frontend calls methods of this class via window.pywebview.api.<method>().
+    Add your own methods below and expose them to the Vue frontend.
+    \"\"\"
+
+    def greet(self, name: str) -> str:
+        return f"Hello, {name}!"
+
+    def create_user(self, name: str, email: str = "") -> dict:
+        \"\"\"Create a new user and return user info.\"\"\"
+        with get_db_session() as session:
+            user = User(name=name, email=email)
+            session.add(user)
+            session.commit()
+            return {"id": user.id, "name": user.name, "email": user.email}
+
+    def get_users(self) -> list:
+        \"\"\"Get all users.\"\"\"
+        with get_db_session() as session:
+            users = session.query(User).all()
+            return [{"id": u.id, "name": u.name, "email": u.email} for u in users]
+
+    def delete_user(self, user_id: int) -> bool:
+        \"\"\"Delete a user by ID.\"\"\"
+        with get_db_session() as session:
+            user = session.query(User).filter_by(id=user_id).first()
+            if user:
+                session.delete(user)
+                session.commit()
+                return True
+            return False
+"""
+
+DB_INIT_PY = """\
+# Database package: SQLAlchemy models and utilities
+"""
+
+DB_MODELS_PY = """\
+from sqlalchemy import Column, Integer, String, DateTime, func
+from sqlalchemy.orm import declarative_base
+
+Base = declarative_base()
+
+
+class User(Base):
+    \"\"\"Example user model.\"\"\"
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    email = Column(String(200), default="")
+    created_at = Column(DateTime, server_default=func.now())
+
+    def __repr__(self):
+        return f"<User(id={self.id}, name='{self.name}')>"
+"""
+
+DB_UTILS_PY = """\
+import os
+from contextlib import contextmanager
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+
+from .models import Base
+
+# Database file path (relative to backend/data/)
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "app.db")
+
+# Create engine
+engine = create_engine(f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False})
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def init_db():
+    \"\"\"Initialize database tables.\"\"\"
+    # Ensure data directory exists
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    Base.metadata.create_all(bind=engine)
+
+
+@contextmanager
+def get_db_session() -> Session:
+    \"\"\"Get a database session as a context manager.\"\"\"
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+"""
+
+MAIN_PY_WITH_DB = """\
+import sys
+import os
+import webview
+from config import WINDOW_TITLE, HTML_PATH_DEV, HTML_PATH_APP
+
+# Import database utilities
+from db.utils import init_db
+
+
+def get_html_path() -> str:
+    \"\"\"Resolve the correct HTML path depending on the runtime environment.\"\"\"
+    if getattr(sys, 'frozen', False):
+        # PyInstaller packaged environment: use sys._MEIPASS to locate resources
+        base = sys._MEIPASS
+        return os.path.join(base, HTML_PATH_APP)
+    else:
+        # Development / testing environment: use relative path to frontend/dist
+        base = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base, HTML_PATH_DEV)
+
+
+def main():
+    # Initialize database
+    init_db()
+
+    from bridge.api import Api
+    api = Api()
+    window = webview.create_window(
+        WINDOW_TITLE,
+        url=get_html_path(),
+        js_api=api,
+    )
+    webview.start()
+
+
+if __name__ == '__main__':
+    main()
 """
 
 SPEC_FILE = """\
@@ -209,4 +350,261 @@ Thumbs.db
 
 # Logs
 *.log
+"""
+
+PROJECT_README_MD = """\
+# {project_name}
+
+This project was created with [wv-cli](https://github.com/yourname/wv-cli) — a scaffold tool for building pywebview + Vue 3 / React desktop apps.
+
+## Project Structure
+
+```
+.
+├── icon/              # Application icons
+├── frontend/          # Vue 3 or React (Vite)
+├── backend/           # Python backend
+│   ├── src/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   └── bridge/
+│   │       └── api.py
+│   └── data/          # SQLite database (if enabled)
+├── build/             # Build output
+└── wv.toml            # Project configuration
+```
+
+## Development Commands
+
+### Run in development mode
+
+```bash
+wv run
+```
+
+Builds the frontend and launches the pywebview window.
+
+### Production build
+
+```bash
+wv build
+```
+
+Builds the frontend and packages the app with PyInstaller.
+
+### Build + Windows installer
+
+```bash
+wv build --publish
+```
+
+Generates a Windows installer using Inno Setup.
+
+## Frontend Development
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Backend Development
+
+```bash
+cd backend
+source .venv/bin/activate  # Linux/Mac
+# or: .venv\\Scripts\\activate  # Windows
+```
+
+## JS Bridge API
+
+The frontend can call Python methods via `window.pywebview.api.<method>()`.
+
+Example:
+
+```javascript
+const result = await window.pywebview.api.greet('World')
+console.log(result)  // "Hello, World!"
+```
+
+Edit `backend/src/bridge/api.py` to add your own API methods.
+
+## Frontend Router Note
+
+When using Vue Router or React Router, ensure you use **HashHistory** mode for `file://` protocol compatibility:
+
+- **Vue**: Use `createWebHashHistory` instead of `createWebHistory`
+- **React**: Use `createHashHistory` instead of `createBrowserHistory`
+"""
+
+PROJECT_README_MD_WITH_DB = """\
+# {project_name}
+
+This project was created with [wv-cli](https://github.com/yourname/wv-cli) — a scaffold tool for building pywebview + Vue 3 / React desktop apps.
+
+## Project Structure
+
+```
+.
+├── icon/              # Application icons
+├── frontend/          # Vue 3 or React (Vite)
+├── backend/           # Python backend
+│   ├── src/
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── bridge/
+│   │   │   └── api.py
+│   │   └── db/        # Database module
+│   │       ├── models.py
+│   │       └── utils.py
+│   └── data/          # SQLite database files
+├── build/             # Build output
+└── wv.toml            # Project configuration
+```
+
+## Development Commands
+
+### Run in development mode
+
+```bash
+wv run
+```
+
+Builds the frontend and launches the pywebview window.
+
+### Production build
+
+```bash
+wv build
+```
+
+Builds the frontend and packages the app with PyInstaller.
+
+### Build + Windows installer
+
+```bash
+wv build --publish
+```
+
+Generates a Windows installer using Inno Setup.
+
+## Frontend Development
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Backend Development
+
+```bash
+cd backend
+source .venv/bin/activate  # Linux/Mac
+# or: .venv\\Scripts\\activate  # Windows
+```
+
+## JS Bridge API
+
+The frontend can call Python methods via `window.pywebview.api.<method>()`.
+
+Example:
+
+```javascript
+const result = await window.pywebview.api.greet('World')
+console.log(result)  // "Hello, World!"
+```
+
+Edit `backend/src/bridge/api.py` to add your own API methods.
+
+## Frontend Router Note
+
+When using Vue Router or React Router, ensure you use **HashHistory** mode for `file://` protocol compatibility:
+
+- **Vue**: Use `createWebHashHistory` instead of `createWebHistory`
+- **React**: Use `createHashHistory` instead of `createBrowserHistory`
+
+## Database (SQLite)
+
+This project uses SQLAlchemy ORM with SQLite.
+
+### Database API Examples
+
+```javascript
+// Create a user
+const newUser = await window.pywebview.api.create_user('John', 'john@example.com')
+
+// Get all users
+const users = await window.pywebview.api.get_users()
+
+// Delete a user
+const success = await window.pywebview.api.delete_user(1)
+```
+
+### Customizing Models
+
+Edit `backend/src/db/models.py` to add your own models:
+
+```python
+from sqlalchemy import Column, Integer, String
+from db.models import Base
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(200), nullable=False)
+    completed = Column(Integer, default=0)
+```
+
+Then regenerate the database by deleting `backend/data/app.db` and restarting the app.
+
+### Alembic Database Migrations
+
+This project includes Alembic for database migrations.
+
+#### Initialize Alembic (first time only)
+
+```bash
+cd backend
+alembic init alembic
+```
+
+#### Create a new migration
+
+```bash
+cd backend
+alembic revision --autogenerate -m "Add users table"
+```
+
+#### Apply migrations
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+#### Downgrade migrations
+
+```bash
+cd backend
+alembic downgrade -1
+```
+
+#### View current revision
+
+```bash
+cd backend
+alembic current
+```
+
+### Database Configuration
+
+The database file is stored at `backend/data/app.db`.
+
+To change the database location, edit `backend/src/db/utils.py`:
+
+```python
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "app.db")
+```
 """

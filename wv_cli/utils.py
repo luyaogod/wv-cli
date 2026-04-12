@@ -100,14 +100,25 @@ def ensure_npm_deps(frontend_dir: str) -> None:
 
 
 def detect_package_manager(project_root: str) -> str:
-    """Detect which package manager the project uses based on lock files.
+    """Detect which package manager the project uses.
 
     Priority:
-    1. pnpm-lock.yaml -> pnpm
-    2. yarn.lock -> yarn (future support)
-    3. package-lock.json -> npm
-    4. Default -> npm
+    1. wv.toml package_manager field
+    2. pnpm-lock.yaml -> pnpm
+    3. yarn.lock -> yarn (future support)
+    4. package-lock.json -> npm
+    5. Default -> npm
     """
+    # First, check wv.toml for recorded package manager
+    try:
+        config = load_config(project_root)
+        pm_from_config = config.get("project", {}).get("package_manager")
+        if pm_from_config:
+            return pm_from_config
+    except Exception:
+        pass
+
+    # Fall back to lock file detection
     frontend_dir = os.path.join(project_root, "frontend")
     pnpm_lock = os.path.join(frontend_dir, "pnpm-lock.yaml")
 
